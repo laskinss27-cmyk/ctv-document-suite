@@ -42,19 +42,53 @@ def _register_fonts():
     global _FONTS_REGISTERED
     if _FONTS_REGISTERED:
         return
-    for base in ['/usr/share/fonts/truetype/dejavu/',
-                 '/usr/share/fonts/dejavu/',
-                 '/Library/Fonts/',
-                 'C:/Windows/Fonts/']:
-        r = Path(base) / 'DejaVuSans.ttf'
-        b = Path(base) / 'DejaVuSans-Bold.ttf'
-        i = Path(base) / 'DejaVuSans-Oblique.ttf'
-        if r.exists():
-            pdfmetrics.registerFont(TTFont('DV',  str(r)))
-            pdfmetrics.registerFont(TTFont('DVB', str(b)))
-            pdfmetrics.registerFont(TTFont('DVI', str(i)))
+
+    import sys
+
+    # Наборы (regular, bold, italic) — проверяются по порядку
+    FONT_SETS = [
+        # Windows — Arial всегда установлен
+        ('C:/Windows/Fonts/arial.ttf',
+         'C:/Windows/Fonts/arialbd.ttf',
+         'C:/Windows/Fonts/ariali.ttf'),
+        # macOS
+        ('/Library/Fonts/Arial.ttf',
+         '/Library/Fonts/Arial Bold.ttf',
+         '/Library/Fonts/Arial Italic.ttf'),
+        ('/System/Library/Fonts/Supplemental/Arial.ttf',
+         '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+         '/System/Library/Fonts/Supplemental/Arial Italic.ttf'),
+        # Linux — DejaVu
+        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'),
+        ('/usr/share/fonts/dejavu/DejaVuSans.ttf',
+         '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+         '/usr/share/fonts/dejavu/DejaVuSans-Oblique.ttf'),
+    ]
+
+    # PyInstaller .exe — ресурсы в sys._MEIPASS
+    if hasattr(sys, '_MEIPASS'):
+        mp = Path(sys._MEIPASS)
+        FONT_SETS.insert(0, (str(mp / 'arial.ttf'),
+                             str(mp / 'arialbd.ttf'),
+                             str(mp / 'ariali.ttf')))
+
+    # Локальная папка fonts/ рядом со скриптом
+    local = Path(__file__).resolve().parent / 'fonts'
+    FONT_SETS.insert(0, (str(local / 'arial.ttf'),
+                         str(local / 'arialbd.ttf'),
+                         str(local / 'ariali.ttf')))
+
+    for r, b, i in FONT_SETS:
+        if Path(r).exists() and Path(b).exists() and Path(i).exists():
+            pdfmetrics.registerFont(TTFont('DV',  r))
+            pdfmetrics.registerFont(TTFont('DVB', b))
+            pdfmetrics.registerFont(TTFont('DVI', i))
             _FONTS_REGISTERED = True
             return
+
+    # Fallback: apt-get на Linux
     try:
         import subprocess
         subprocess.run(['apt-get', 'install', '-y', 'fonts-dejavu'],
@@ -62,11 +96,18 @@ def _register_fonts():
         p = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
         if Path(p).exists():
             pdfmetrics.registerFont(TTFont('DV',  p))
-            pdfmetrics.registerFont(TTFont('DVB', p.replace('Sans.','Sans-Bold.')))
-            pdfmetrics.registerFont(TTFont('DVI', p.replace('Sans.','Sans-Oblique.')))
+            pdfmetrics.registerFont(TTFont('DVB', p.replace('Sans.', 'Sans-Bold.')))
+            pdfmetrics.registerFont(TTFont('DVI', p.replace('Sans.', 'Sans-Oblique.')))
             _FONTS_REGISTERED = True
+            return
     except Exception:
         pass
+
+    raise RuntimeError(
+        'Шрифты не найдены!\n'
+        'Windows: проверьте C:\\Windows\\Fonts\\arial.ttf\n'
+        'Linux:   установите пакет fonts-dejavu'
+    )
 
 
 def _s(name, **kw):
