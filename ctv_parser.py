@@ -307,7 +307,7 @@ def parse(xlsx_path: str) -> dict:
     }
 
 
-def img_bytes_to_thumbnail(img_bytes, size=(120, 120)) -> bytes | None:
+def img_bytes_to_thumbnail(img_bytes, size=(120, 120)):
     """Конвертирует байты изображения в миниатюру PNG для GUI."""
     if not img_bytes:
         return None
