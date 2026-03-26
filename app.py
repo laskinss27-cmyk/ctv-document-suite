@@ -11,7 +11,7 @@ import threading, os, sys, io, copy
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import parser as kp_parser
+import ctv_parser as kp_parser
 import kp_pdf
 import updater
 
