@@ -12,11 +12,10 @@ a = Analysis(
     pathex=[str(Path('app.py').parent)],
     binaries=[],
     datas=[
-        # Шрифты DejaVu — обязательно для кириллицы в PDF
-        # Windows:
-        ('C:/Windows/Fonts/DejaVuSans.ttf',          'fonts'),
-        ('C:/Windows/Fonts/DejaVuSans-Bold.ttf',     'fonts'),
-        ('C:/Windows/Fonts/DejaVuSans-Oblique.ttf',  'fonts'),
+        # Шрифты Arial — стандартные шрифты Windows с поддержкой кириллицы
+        ('C:/Windows/Fonts/arial.ttf',   'fonts'),
+        ('C:/Windows/Fonts/arialbd.ttf', 'fonts'),
+        ('C:/Windows/Fonts/ariali.ttf',  'fonts'),
     ],
     hiddenimports=[
         'PIL._tkinter_finder',
