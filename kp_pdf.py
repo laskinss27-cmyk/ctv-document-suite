@@ -404,7 +404,9 @@ def _works_table(works):
         rc.append(('BACKGROUND', (0, i), (-1, i),
                    C_AMBER if i % 2 == 1 else C_WHITE))
 
-    t = Table(rows, colWidths=[7*mm, 90*mm, 16*mm, 24*mm, 25*mm])
+    # Используем None для колонки с наименованием, чтобы она занимала всю оставшуюся ширину
+    t = Table(rows, colWidths=[7*mm, None, 16*mm, 24*mm, 25*mm],
+              splitByRow=True)
     t.setStyle(TableStyle([
         ('BACKGROUND',    (0,0),(-1, 0), colors.HexColor('#92400E')),
         ('TOPPADDING',    (0,0),(-1,-1), 4),
@@ -486,7 +488,9 @@ def _equip_summary(equipment):
         rc.append(('BACKGROUND', (0, i), (-1, i),
                    C_LBLUE if i % 2 == 1 else C_WHITE))
 
-    t = Table(rows, colWidths=[7*mm, 72*mm, 16*mm, 24*mm, 14*mm, 25*mm])
+    # Используем None для колонки с наименованием, чтобы она занимала всю оставшуюся ширину
+    t = Table(rows, colWidths=[7*mm, None, 16*mm, 24*mm, 14*mm, 25*mm],
+              splitByRow=True)
     t.setStyle(TableStyle([
         ('BACKGROUND',    (0,0),(-1, 0), C_DARK),
         ('TOPPADDING',    (0,0),(-1,-1), 3),
