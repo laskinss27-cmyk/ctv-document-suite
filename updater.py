@@ -14,13 +14,16 @@ updater.py — автообновление через GitHub Releases.
 import os
 import re
 import sys
+import logging
 import threading
 import tempfile
 import urllib.request
 from pathlib import Path
 
+log = logging.getLogger(__name__)
+
 # ── Настройки ─────────────────────────────────────────────────────────────────
-GITHUB_REPO    = 'ТВОЙ_ЛОГИН/ctv-document-suite'   # ← заменить после создания репо
+GITHUB_REPO    = 'laskinss27-cmyk/ctv-document-suite'
 APP_VERSION    = '2.0.0'
 CHECK_INTERVAL = 20 * 60   # секунд (20 минут)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,8 +107,8 @@ def check_for_update():
                 'changelog':    body,
             }
 
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning('Ошибка проверки обновлений: %s', e)
     return None
 
 
@@ -219,6 +222,6 @@ class AutoUpdater:
                 if info:
                     self._root.after(0, self._callback, info)
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning('Ошибка в цикле автообновления: %s', e)
             self._stop.wait(CHECK_INTERVAL)

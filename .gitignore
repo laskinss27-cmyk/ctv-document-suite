@@ -1,4 +1,3 @@
-```
 # Python
 __pycache__/
 *.pyc
@@ -15,6 +14,10 @@ __pycache__/
 .env.local
 *.env.*
 
+# Secrets
+secrets*
+credentials*
+
 # Editors
 .vscode/
 .idea/
@@ -28,4 +31,13 @@ node_modules/
 dist/
 build/
 target/
-```
+*.exe
+*.dll
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local version tracker
+version_local.txt

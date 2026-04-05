@@ -54,8 +54,8 @@ def _open_file(path):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  ScrollList — tk.Text с embedded Frame-строками
-#  Строки крупные, адаптивные. Скролл колесом — нативный через Text.
+#  ScrollList — Canvas + Frame (надёжный адаптивный скролл-контейнер)
+#  Каждая строка автоматически заполняет ширину контейнера при resize.
 # ─────────────────────────────────────────────────────────────────────────────
 class ScrollList(tk.Frame):
     def __init__(self, parent, **kw):
@@ -64,57 +64,66 @@ class ScrollList(tk.Frame):
         self.columnconfigure(1, weight=0)
         self.rowconfigure(0, weight=1)
 
-        sb = ttk.Scrollbar(self, orient='vertical')
+        self._canvas = tk.Canvas(
+            self, bg=BG, highlightthickness=0, bd=0, relief='flat',
+        )
+        sb = ttk.Scrollbar(self, orient='vertical', command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=sb.set)
+
+        self._canvas.grid(row=0, column=0, sticky='nsew')
         sb.grid(row=0, column=1, sticky='ns')
 
-        self._t = tk.Text(
-            self,
-            yscrollcommand=sb.set,
-            bg=BG, relief='flat', bd=0,
-            highlightthickness=0,
-            state='disabled', wrap='none',
-            cursor='arrow',
-            selectbackground=BG,
-            inactiveselectbackground=BG,
+        # Внутренний Frame — сюда добавляются строки через pack(fill='x')
+        self._inner = tk.Frame(self._canvas, bg=BG)
+        self._win_id = self._canvas.create_window(
+            (0, 0), window=self._inner, anchor='nw',
         )
-        self._t.grid(row=0, column=0, sticky='nsew')
-        sb.configure(command=self._t.yview)
 
-        self._t.bind('<MouseWheel>', self._wheel)
-        self._t.bind('<Button-4>',   self._wheel)
-        self._t.bind('<Button-5>',   self._wheel)
-        self._first = True
+        # При изменении содержимого — обновляем scrollregion
+        self._inner.bind('<Configure>', self._on_inner_cfg)
+        # При изменении размера Canvas — подгоняем ширину inner Frame
+        self._canvas.bind('<Configure>', self._on_canvas_cfg)
+
+        # Скролл колесом мыши
+        self._canvas.bind('<MouseWheel>', self._wheel)
+        self._canvas.bind('<Button-4>',   self._wheel)
+        self._canvas.bind('<Button-5>',   self._wheel)
+
+    @property
+    def content(self):
+        """Frame-контейнер, в который нужно создавать дочерние виджеты."""
+        return self._inner
+
+    def _on_inner_cfg(self, _e=None):
+        self._canvas.configure(scrollregion=self._canvas.bbox('all'))
+
+    def _on_canvas_cfg(self, e):
+        # Принудительно задаём ширину inner == ширине Canvas
+        self._canvas.itemconfigure(self._win_id, width=e.width)
 
     def _wheel(self, e):
         if e.delta:
-            self._t.yview_scroll(int(-1 * (e.delta / 120)), 'units')
+            self._canvas.yview_scroll(int(-1 * (e.delta / 120)), 'units')
         elif e.num == 4:
-            self._t.yview_scroll(-1, 'units')
+            self._canvas.yview_scroll(-1, 'units')
         else:
-            self._t.yview_scroll(1, 'units')
+            self._canvas.yview_scroll(1, 'units')
         return 'break'
 
     def _fwd(self, w):
-        """Прокидываем колесо от дочерних виджетов к Text (один уровень)."""
+        """Прокидываем колесо от дочерних виджетов к Canvas."""
         for widget in [w] + w.winfo_children():
             widget.bind('<MouseWheel>', self._wheel, add='+')
             widget.bind('<Button-4>',   self._wheel, add='+')
             widget.bind('<Button-5>',   self._wheel, add='+')
 
     def add(self, widget):
-        self._t.configure(state='normal')
-        if not self._first:
-            self._t.insert('end', '\n')
-        self._first = False
-        self._t.window_create('end', window=widget, stretch=True)
-        self._t.configure(state='disabled')
+        widget.pack(in_=self._inner, fill='x', padx=0, pady=0)
         self._fwd(widget)
 
     def clear(self):
-        self._t.configure(state='normal')
-        self._t.delete('1.0', 'end')
-        self._t.configure(state='disabled')
-        self._first = True
+        for w in self._inner.winfo_children():
+            w.destroy()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -442,42 +451,9 @@ class App(tk.Tk):
             self._works_list.add(self._make_work_row(item, idx))
 
     def _make_equip_row(self, item, idx):
-        row = tk.Frame(self._equip_list, bg=ITEM_BG, pady=6, padx=10)
+        row = tk.Frame(self._equip_list.content, bg=ITEM_BG, pady=6, padx=10)
 
-        # Фото 46×46
-        if HAS_PIL and item.get('img_bytes'):
-            try:
-                pil = PILImage.open(io.BytesIO(item['img_bytes'])).convert('RGB')
-                pil.thumbnail((46, 46), PILImage.LANCZOS)
-                tk_img = ImageTk.PhotoImage(pil)
-                lbl = tk.Label(row, image=tk_img, bg=ITEM_BG)
-                lbl._img = tk_img
-                lbl.pack(side='left', padx=(0, 10))
-            except Exception:
-                pass
-
-        # Текст
-        info = tk.Frame(row, bg=ITEM_BG)
-        info.pack(side='left', fill='both', expand=True)
-
-        tk.Label(info,
-                 text=item.get('name', '—'),
-                 font=('Helvetica', 10, 'bold'),
-                 fg=TEXT, bg=ITEM_BG,
-                 anchor='w', justify='left',
-                 wraplength=1).pack(anchor='w', fill='x')   # wraplength обновится через bind
-
-        art   = item.get('article', '')
-        price = item.get('price', 0)
-        qty   = item.get('qty',   1)
-        parts = ([f'Арт. {art}'] if art else []) + [f'{price:,.0f} руб. × {qty:g} шт.']
-        tk.Label(info,
-                 text='   ·   '.join(parts),
-                 font=('Helvetica', 9),
-                 fg=SUB, bg=ITEM_BG,
-                 anchor='w').pack(anchor='w')
-
-        # Кнопки — всегда справа, всегда видны
+        # Кнопки — всегда справа, pack ПЕРВЫМИ чтобы гарантировать место
         btns = tk.Frame(row, bg=ITEM_BG)
         btns.pack(side='right', padx=(6, 0))
         for sym, clr, cmd in [
@@ -495,6 +471,43 @@ class App(tk.Tk):
                       cursor='hand2',
                       command=cmd).pack(side='left')
 
+        # Фото 46×46
+        if HAS_PIL and item.get('img_bytes'):
+            try:
+                pil = PILImage.open(io.BytesIO(item['img_bytes'])).convert('RGB')
+                pil.thumbnail((46, 46), PILImage.LANCZOS)
+                tk_img = ImageTk.PhotoImage(pil)
+                lbl = tk.Label(row, image=tk_img, bg=ITEM_BG)
+                lbl._img = tk_img
+                lbl.pack(side='left', padx=(0, 10))
+            except Exception:
+                pass
+
+        # Текст — fill='both' + expand=True занимает всё оставшееся место
+        info = tk.Frame(row, bg=ITEM_BG)
+        info.pack(side='left', fill='both', expand=True)
+
+        name_lbl = tk.Label(info,
+                 text=item.get('name', '—'),
+                 font=('Helvetica', 10, 'bold'),
+                 fg=TEXT, bg=ITEM_BG,
+                 anchor='w', justify='left')
+        name_lbl.pack(anchor='w', fill='x')
+        # Динамический wraplength: привязываемся к реальной ширине info-блока
+        name_lbl.bind('<Configure>',
+                      lambda e, lbl=name_lbl: lbl.configure(wraplength=e.width - 4)
+                      if e.width > 20 else None)
+
+        art   = item.get('article', '')
+        price = item.get('price', 0)
+        qty   = item.get('qty',   1)
+        parts = ([f'Арт. {art}'] if art else []) + [f'{price:,.0f} руб. × {qty:g} шт.']
+        tk.Label(info,
+                 text='   ·   '.join(parts),
+                 font=('Helvetica', 9),
+                 fg=SUB, bg=ITEM_BG,
+                 anchor='w').pack(anchor='w')
+
         # Разделитель снизу
         tk.Frame(row, bg=BORDER, height=1).pack(
             side='bottom', fill='x', pady=(6, 0))
@@ -502,23 +515,9 @@ class App(tk.Tk):
         return row
 
     def _make_work_row(self, item, idx):
-        row = tk.Frame(self._works_list, bg=ITEM_BG, pady=6, padx=10)
+        row = tk.Frame(self._works_list.content, bg=ITEM_BG, pady=6, padx=10)
 
-        info = tk.Frame(row, bg=ITEM_BG)
-        info.pack(side='left', fill='both', expand=True)
-
-        tk.Label(info,
-                 text=item.get('name', '—'),
-                 font=('Helvetica', 10, 'bold'),
-                 fg=TEXT, bg=ITEM_BG,
-                 anchor='w', justify='left').pack(anchor='w', fill='x')
-
-        tk.Label(info,
-                 text=f'{item.get("price",0):,.0f} руб. × {item.get("qty",1):g}',
-                 font=('Helvetica', 9),
-                 fg=SUB, bg=ITEM_BG,
-                 anchor='w').pack(anchor='w')
-
+        # Кнопки — pack ПЕРВЫМИ чтобы гарантировать место
         btns = tk.Frame(row, bg=ITEM_BG)
         btns.pack(side='right', padx=(6, 0))
         for sym, clr, cmd in [
@@ -535,6 +534,25 @@ class App(tk.Tk):
                       padx=5, pady=2,
                       cursor='hand2',
                       command=cmd).pack(side='left')
+
+        info = tk.Frame(row, bg=ITEM_BG)
+        info.pack(side='left', fill='both', expand=True)
+
+        work_name_lbl = tk.Label(info,
+                 text=item.get('name', '—'),
+                 font=('Helvetica', 10, 'bold'),
+                 fg=TEXT, bg=ITEM_BG,
+                 anchor='w', justify='left')
+        work_name_lbl.pack(anchor='w', fill='x')
+        work_name_lbl.bind('<Configure>',
+                           lambda e, lbl=work_name_lbl: lbl.configure(wraplength=e.width - 4)
+                           if e.width > 20 else None)
+
+        tk.Label(info,
+                 text=f'{item.get("price",0):,.0f} руб. × {item.get("qty",1):g}',
+                 font=('Helvetica', 9),
+                 fg=SUB, bg=ITEM_BG,
+                 anchor='w').pack(anchor='w')
 
         tk.Frame(row, bg=BORDER, height=1).pack(
             side='bottom', fill='x', pady=(6, 0))

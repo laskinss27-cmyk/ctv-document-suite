@@ -2,10 +2,14 @@
 # Файл сборки PyInstaller для CTV Document Suite
 # Запуск: pyinstaller CTV_Suite.spec
 
+import os
 import sys
 from pathlib import Path
 
 block_cipher = None
+
+# Динамический путь к шрифтам Windows
+_fonts_dir = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts')
 
 a = Analysis(
     ['app.py'],
@@ -13,9 +17,9 @@ a = Analysis(
     binaries=[],
     datas=[
         # Шрифты Arial — стандартные шрифты Windows с поддержкой кириллицы
-        ('C:/Windows/Fonts/arial.ttf',   'fonts'),
-        ('C:/Windows/Fonts/arialbd.ttf', 'fonts'),
-        ('C:/Windows/Fonts/ariali.ttf',  'fonts'),
+        (os.path.join(_fonts_dir, 'arial.ttf'),   'fonts'),
+        (os.path.join(_fonts_dir, 'arialbd.ttf'), 'fonts'),
+        (os.path.join(_fonts_dir, 'ariali.ttf'),  'fonts'),
     ],
     hiddenimports=[
         'PIL._tkinter_finder',
@@ -47,7 +51,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,             # отключено — UPX вызывает ложные срабатывания антивируса
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,           # без консоли (GUI-приложение)
