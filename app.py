@@ -53,6 +53,72 @@ def _open_file(path):
         pass
 
 
+def _install_clipboard_bindings(root):
+    """ПКМ-меню и Ctrl+C/V/X/A для Entry/Text/ScrolledText.
+    Использует keycode, поэтому шорткаты работают и на русской раскладке."""
+
+    def _select_all(w):
+        try:
+            if isinstance(w, (tk.Entry, ttk.Entry)):
+                w.select_range(0, 'end')
+                w.icursor('end')
+            else:
+                w.tag_add('sel', '1.0', 'end-1c')
+                w.mark_set('insert', 'end-1c')
+        except Exception:
+            pass
+        return 'break'
+
+    def _popup(event):
+        w = event.widget
+        try:
+            w.focus_set()
+        except Exception:
+            return
+        m = tk.Menu(w, tearoff=0)
+        is_entry = isinstance(w, (tk.Entry, ttk.Entry))
+        readonly = False
+        try:
+            state = str(w.cget('state'))
+            readonly = state in ('readonly', 'disabled')
+        except Exception:
+            pass
+        if not readonly:
+            m.add_command(label='Вырезать',
+                          command=lambda: w.event_generate('<<Cut>>'))
+        m.add_command(label='Копировать',
+                      command=lambda: w.event_generate('<<Copy>>'))
+        if not readonly:
+            m.add_command(label='Вставить',
+                          command=lambda: w.event_generate('<<Paste>>'))
+        m.add_separator()
+        m.add_command(label='Выделить всё',
+                      command=lambda: _select_all(w))
+        try:
+            m.tk_popup(event.x_root, event.y_root)
+        finally:
+            m.grab_release()
+
+    # Windows virtual key codes (не зависят от раскладки)
+    KC_C, KC_V, KC_X, KC_A = 67, 86, 88, 65
+
+    def _on_ctrl_key(event):
+        kc = event.keycode
+        w = event.widget
+        if kc == KC_C:
+            w.event_generate('<<Copy>>');  return 'break'
+        if kc == KC_V:
+            w.event_generate('<<Paste>>'); return 'break'
+        if kc == KC_X:
+            w.event_generate('<<Cut>>');   return 'break'
+        if kc == KC_A:
+            return _select_all(w)
+
+    for cls in ('Entry', 'TEntry', 'Text'):
+        root.bind_class(cls, '<Button-3>', _popup, add='+')
+        root.bind_class(cls, '<Control-KeyPress>', _on_ctrl_key, add='+')
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  ScrollList — Canvas + Frame (надёжный адаптивный скролл-контейнер)
 #  Каждая строка автоматически заполняет ширину контейнера при resize.
@@ -312,6 +378,8 @@ class App(tk.Tk):
         self._status  = tk.StringVar(value='Загрузите xlsx-файл для начала работы')
         self._prog    = tk.IntVar(value=0)
         self._running = False
+
+        _install_clipboard_bindings(self)
 
         self._build_ui()
         self._auto_updater = updater.AutoUpdater(self, self._on_update_found)
